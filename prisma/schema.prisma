@@ -1,0 +1,192 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  TESTER
+  DEVELOPER
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  type         Role
+
+  proyectos     Proyecto[]
+  comments      Comment[]
+  createdNonConformities NonConformity[] @relation("NonConformityCreatedBy")
+  assignedNonConformities NonConformity[] @relation("NonConformityAssignedTo")
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Proyecto {
+  id        String @id
+  name      String
+  description String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sprints Sprint[]  
+  usuarios      User[]
+  
+  @@map("proyecto")
+}
+
+model Sprint {
+  id        String @id
+  name      String
+  projectId String
+  project   Proyecto @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  startAt   DateTime
+  endAt     DateTime
+  nonConformities NonConformity[]
+  @@map("sprint")
+}
+
+enum NonConformityStatus {
+  NEW
+  ASSIGNED
+  IN_PROGRESS
+  PENDING_QA
+  CLOSED
+  REOPENED
+}
+
+enum NonConformityPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model NonConformityType {
+  id String @id
+  name String @unique
+  nonConformities NonConformity[]
+  
+  @@map("nonconformity_type")
+}
+
+model StateChange {
+  id String @id
+  nonConformityId String
+  nonConformity NonConformity @relation(fields: [nonConformityId], references: [id])
+  status NonConformityStatus
+  createdAt DateTime @default(now())
+}
+
+model Media {
+  id String @id
+  fileId String
+  nonConformities NonConformity[] @relation("NonConformityMedia")
+  commentId String?
+  comment Comment? @relation(fields: [commentId], references: [id])
+}
+
+model NonConformity {
+  id        String @id
+  title      String
+  description String
+  expected String
+  sprintId  String
+  sprint    Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  typeId String
+  type NonConformityType @relation(fields: [typeId], references: [id])
+  status NonConformityStatus
+  priority NonConformityPriority
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  createdById String?
+  createdBy User? @relation("NonConformityCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  assignedToId String?
+  assignedTo User? @relation("NonConformityAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  
+  stateChanges StateChange[]
+
+  media Media[] @relation("NonConformityMedia")
+  comments Comment[]
+
+  @@map("nonconformity")
+}
+
+model Comment {
+  id String @id
+  comment String
+  userId String
+  nonConformityId String
+  nonConformity NonConformity @relation(fields: [nonConformityId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  media Media[]
+}
